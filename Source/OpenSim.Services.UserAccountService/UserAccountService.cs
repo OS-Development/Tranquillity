@@ -124,14 +124,32 @@ namespace OpenSim.Services.UserAccountService
                             "Create a new user", HandleCreateUser);
 
                     MainConsole.Instance.Commands.AddCommand("Users", false,
-                            "reset user password",
-                            "reset user password [<first> [<last> [<password>]]]",
-                        "Reset a user password", HandleResetUserPassword);
+                            "import users",
+                            "import users [<CSV file>]",
+                            "Import users from a CSV file into OpenSim",
+                            HandleImportUsers);
 
                     MainConsole.Instance.Commands.AddCommand("Users", false,
-                        "reset user email",
-                        "reset user email [<first> [<last> [<email>]]]",
-                        "Reset a user email address", HandleResetUserEmail);
+                            "update users",
+                            "update users [<CSV file>]",
+                            "Update users from a CSV file into OpenSim",
+                            HandleUpdateUsers);
+
+                    MainConsole.Instance.Commands.AddCommand("Users", false,
+                            "rename users",
+                            "rename users [<CSV file>]",
+                            "Renames users from a CSV file into OpenSim",
+                            HandleRenameUsers);
+
+                    MainConsole.Instance.Commands.AddCommand("Users", false,
+                            "reset user password",
+                            "reset user password [<first> [<last> [<password>]]]",
+                            "Reset a user password", HandleResetUserPassword);
+
+                    MainConsole.Instance.Commands.AddCommand("Users", false,
+                            "reset user email",
+                            "reset user email [<first> [<last> [<email>]]]",
+                            "Reset a user email address", HandleResetUserEmail);
 
                     MainConsole.Instance.Commands.AddCommand("Users", false,
                             "set user level",
@@ -470,6 +488,134 @@ namespace OpenSim.Services.UserAccountService
                 throw new Exception(string.Format("ID {0} is not a valid UUID", rawPrincipalId));
 
             CreateUser(UUID.Zero, principalId, firstName, lastName, password, email, model);
+        }
+
+        protected void HandleImportUsers(string module, string[] cmd)
+        {
+            string fileName = "users.csv";
+
+            int userNo = 0;
+            string firstName;
+            string lastName;
+            string email;
+            string password;
+            string sRezday;
+            UUID userUUID;
+
+            fileName = "Imports/" + fileName;
+
+            // good to go...
+            using (var rd = new StreamReader(fileName))
+            {
+                while (!rd.EndOfStream)
+                {
+                    var userInfo = rd.ReadLine().Split(',');
+                    if (userInfo.Length < 5)
+                    {
+                        MainConsole.Instance.Output("[User Load]: Insufficient details; Skipping " + userInfo);
+                        continue;
+                    }
+
+                    userUUID = (UUID)userInfo[0];
+                    firstName = userInfo[1];
+                    lastName = userInfo[2];
+                    password = userInfo[3];
+                    email = userInfo.Length > 4 ? userInfo[4] : "";
+                    sRezday = userInfo[5];
+
+                    CreateUser(UUID.Zero, userUUID, firstName, lastName, password, email);
+
+                    //set user levels and status  (if needed)
+                    var userAcct = GetUserAccount(UUID.Zero, firstName, lastName);
+                    int rezday = Int32.Parse(sRezday);
+                    userAcct.Created = rezday;
+                    StoreUserAccount(userAcct);
+
+                    userNo++;
+                }
+                MainConsole.Instance.Output("File: {0} loaded,  {1} users added", Path.GetFileName(fileName), userNo);
+            }
+        }
+
+        protected void HandleUpdateUsers(string module, string[] cmd)
+        {
+            string fileName = "users.csv";
+
+            int userNo = 0;
+            string firstName;
+            string lastName;
+            string sRezday;
+
+            fileName = "Imports/" + fileName;
+
+            // good to go...
+            using (var rd = new StreamReader(fileName))
+            {
+                while (!rd.EndOfStream)
+                {
+                    var userInfo = rd.ReadLine().Split(',');
+                    if (userInfo.Length < 5)
+                    {
+                        MainConsole.Instance.Output("[User Load]: Insufficient details; Skipping " + userInfo);
+                        continue;
+                    }
+
+                    firstName = userInfo[1];
+                    lastName = userInfo[2];
+                    sRezday = userInfo[5];
+
+                    var userAcct = GetUserAccount(UUID.Zero, firstName, lastName);
+                    int rezday = Int32.Parse(sRezday);
+                    userAcct.Created = rezday;
+                    StoreUserAccount(userAcct);
+                    MainConsole.Instance.Output("[USER UPDATE]: User " + firstName + " " + lastName + " has been updated");
+
+                    userNo++;
+                }
+                MainConsole.Instance.Output("File: {0} loaded,  {1} users added", Path.GetFileName(fileName), userNo);
+            }
+        }
+
+        protected void HandleRenameUsers(string module, string[] cmdparams)
+        {
+            string fileName = "users.csv";
+
+            int userNo = 0;
+            string firstName;
+            string lastName;
+            string userUUID;
+
+            fileName = "Imports/" + fileName;
+
+            // good to go...
+            using (var rd = new StreamReader(fileName))
+            {
+                while (!rd.EndOfStream)
+                {
+                    var userInfo = rd.ReadLine().Split(',');
+                    if (userInfo.Length < 5)
+                    {
+                        MainConsole.Instance.Output("[USER RENAME]: Insufficient details; Skipping " + userInfo);
+                        continue;
+                    }
+                    userUUID = userInfo[0];
+                    firstName = userInfo[1];
+                    lastName = userInfo[2];
+
+                    var userAcct = GetUserAccount(UUID.Zero, userUUID);
+                    MainConsole.Instance.Output("[USER RENAME]: Found user" + userAcct.FirstName + " " + userAcct.LastName);
+                    if (userAcct != null && (userAcct.FirstName != firstName || userAcct.LastName != lastName))
+                    {
+                        userAcct.FirstName = userInfo[1];
+                        userAcct.LastName = userInfo[2];
+                        StoreUserAccount(userAcct);
+                        MainConsole.Instance.Output("[USER RENAME]: User " + firstName + " " + lastName + " has been renamed");
+
+                        userNo++;
+                    }
+                }
+                MainConsole.Instance.Output("File: {0} loaded,  {1} users renamed", Path.GetFileName(fileName), userNo);
+            }
         }
 
         protected void HandleShowAccount(string module, string[] cmdparams)
